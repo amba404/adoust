@@ -1,0 +1,56 @@
+if object_id('tempdb.dbo.##p', 'U') is not null drop table ##p 
+;
+select distinct PaymentID into ##p from g_shiping where cardid > 687000000
+;
+if object_id('tempdb.dbo.#gs', 'U') is not null drop table #gs
+if object_id('tempdb.dbo.##gs', 'U') is not null drop table ##gs 
+;
+SELECT gs.id, gs.date, gs.summa, gs.PaySumma, CardID into #gs
+  FROM [dbo].[g_Shiping] gs inner join ##p on gs.PaymentID = ##p.PaymentID
+  where gs.date >= getdate()-75
+;
+if object_id('tempdb.dbo.##gsd', 'U') is not null drop table ##gsd 
+;
+select gsd.id, gsd.ShipID, gsd.GoodsID, gsd.Quantity, gsd.Price, gsd.Summa, gsd.PaySumma into ##gsd 
+from g_ShipDetails gsd inner join #gs gs on gsd.ShipID = gs.ID
+;
+if object_id('tempdb.dbo.#gt', 'U') is not null drop table #gt
+;
+select distinct gt.id, 'NoTO' + right(replicate('0', 8) + RTRIM(gt.id),8) as GDS_CODE,
+	gt.name,  isnull(u.ShortName, 'רע.') as ed, 0 as VAT, 'RUS' as country, 'T' as gtype  into #gt 
+from g_Mix gt inner join ##gsd gsd on gt.ID=gsd.GoodsID left join Units u on u.id=gt.UnitID  left join g_Groups gg on gg.ID = gt.GroupID
+;
+select distinct g1.id, g1.date, g1.summa, g1.paysumma,  isnull(g1.cardid, g2.cardid) as cardid into ##gs
+from #gs g1 inner join ##gsd gsd on g1.id = gsd.shipid LEFT join g_ShipBack b on gsd.id = b.ID2 left join ##gsd gsd2 on gsd2.id=b.ID1 left join #gs g2 on gsd2.shipid = g2.id
+;
+if object_id('tempdb.dbo.##gt', 'U') is not null drop table ##gt
+;
+select GDS_CODE
+      ,name as GDS_NAME
+      ,ed as MEASUREMENT
+      ,VAT
+      ,COUNTRY
+      ,gTYPE as 'type'  into ##gt from #gt
+;
+if object_id('tempdb.dbo.##ibs', 'U') is not null drop table ##ibs
+;
+select  gsd.id as IBS_TRN_GUID
+      ,gsd.ShipID as TRN_GUID
+      ,'' as ID_CHECK
+      ,gs.Date as DATEOF
+      ,left(rtrim(gs.cardid), len(rtrim(gs.cardid)) - 6) EMITENT
+      ,'687' as POS_EMITENT
+      ,'NoTO' as POS
+      ,'NoTO' as TERMINAL
+      ,gs.cardid as GRAF_NUM
+      ,gsd.PaySumma as  SUMPRICE
+      ,gt.GDS_CODE  as   GDSCODE
+      ,gt.Name as GDSNAME
+      ,gsd.Price as PRICE
+      ,gt.ed as MEASUREMENT
+      ,gsd.Quantity as AMOUNT
+into ##ibs
+from ##gs gs 
+	inner join ##gsd gsd on gs.ID = gsd.ShipID 
+	inner join #gt gt on gt.id = gsd.GoodsID
+;

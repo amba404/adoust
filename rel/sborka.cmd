@@ -1,0 +1,2 @@
+copy /b %1.0?? %1.exe
+rem del /q %1.0??
